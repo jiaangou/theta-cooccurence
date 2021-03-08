@@ -1,0 +1,17 @@
+	sample.x	niche.type	spec.optima	based.on
+sc01	random	random	random	individuals
+sc02	biased	random	random	individuals
+sc03	random	skewed	random	individuals
+sc04	biased	skewed	random	individuals
+sc05	random	random	skewed	individuals
+sc06	biased	random	skewed	individuals
+sc07	random	skewed	skewed	individuals
+sc08	biased	skewed	skewed	individuals
+sc09	random	random	random	species
+sc10	biased	random	random	species
+sc11	random	skewed	random	species
+sc12	biased	skewed	random	species
+sc13	random	random	skewed	species
+sc14	biased	random	skewed	species
+sc15	random	skewed	skewed	species
+sc16	biased	skewed	skewed	species

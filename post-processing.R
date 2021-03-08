@@ -70,13 +70,25 @@ spe_parameters <- function(x){
   return(out)
 }
 
-dynamics.df.all$data[[1]]%>%
+fundamental <- dynamics.df.all$data[[1]]%>%
   spe_parameters()
 
 #II. Calculate theta
-devtools::install_github ('zdealveindy/theta')
-library(theta)
+devtools::install_github ('zdealveindy/genspe')
+library(genspe)
 
+theta <- dynamics.df.all$data[[1]]%>%
+  spe_compo_wide()%>%
+  select(-patch,-env)%>%
+  calculate.theta()%>%
+  rename(`species` = 'sci.name')
+
+fundamental%>%
+  mutate(species = paste0('sp',species))%>%
+  left_join(theta, y = ., by = 'species')%>%
+  ggplot(aes(x = env_niche_breadth, y = theta))+geom_point()
+
+?calculate.theta
 
 
 
