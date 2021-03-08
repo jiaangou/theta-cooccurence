@@ -58,8 +58,9 @@ spe_compo_wide <- function(x){
   return(out)
 }
 
-dynamics.df.all$data[[1]]%>%
-  spe_compo_wide()
+test1 <- dynamics.df.all$data[[1]]%>%
+  spe_compo_wide()%>%
+  select(-patch,-env)
 
 
 #Ib. extract spp (fundamental) parameters (optima, niche width, max_r)
@@ -83,12 +84,44 @@ theta <- dynamics.df.all$data[[1]]%>%
   calculate.theta()%>%
   rename(`species` = 'sci.name')
 
+#BD metrics table
+metrics <- read.delim ('theta metrics for evaluation.txt', row.names = 1, stringsAsFactors = F)
+
+theta.out <- c()
+for (j in rownames(metrics[17,])){
+  theta.out[[j]] <- genspe::calculate.theta(test1,
+                                        method = metrics[j,"method"],
+                                        beta.div.method = metrics[j,"beta.div.method"],
+                                        beta.div.sqrt.D = metrics[j, "beta.div.sqrt.D"],
+                                        force.subsample = metrics[j, "force.subsample"],
+                                        reps = 100)
+}
+
+
+cor.ij <- parLapply (cl, sc, fun = function (sc.temp){
+  cor.j <- vector ('numeric', length = nrow (metrics))
+  names (cor.j) <- rownames (metrics)
+  for (j in rownames (metrics)){
+    temp.theta <- genspe::calculate.theta (sc.temp$a.mat,
+                                         method = metrics[j,"method"],
+                                         beta.div.method = metrics[j,"beta.div.method"],
+                                         beta.div.sqrt.D = metrics[j, "beta.div.sqrt.D"],
+                                         force.subsample = metrics[j, "force.subsample"],
+                                         reps = reps)
+  
+    cor.j[j] <- cor (sc.temp$simul.comm$range[temp.theta$sci.name], temp.theta$theta, method = 'spearman')
+    }
+  cor.j
+  })
+
+
+
+####
 fundamental%>%
   mutate(species = paste0('sp',species))%>%
   left_join(theta, y = ., by = 'species')%>%
   ggplot(aes(x = env_niche_breadth, y = theta))+geom_point()
 
-?calculate.theta
 
 
 
