@@ -2,10 +2,13 @@
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(here)
 
 
 #load simulations
-sim <- readRDS("simulation_runs.rds")
+
+sim <- here("data","simulation_runs.rds")%>%
+  readRDS()
 
 
 #data strucutre: netsted list
@@ -78,7 +81,9 @@ spe_parameters <- function(x){
 }
 
 fundamental <- dynamics.df.all$data%>%
-  lapply(FUN = function(x)spe_parameters(x))
+  lapply(FUN = function(x)spe_parameters(x))%>%
+  tibble(spp_parameters = .)%>%
+  bind_cols(dynamics.df.all[,1:2],. )
 
 
 #Spp paramaters set for simulations
