@@ -2,8 +2,7 @@
 library(here)
 library(dplyr)
 library(tidyr)
-
-
+library(ggplot2)
 
 
 #Load data -------
@@ -69,6 +68,27 @@ theta_realized_df <- theta_df%>%
   left_join(realized_df, by = c('optima_distribution', 'simulation', 'saturation', 'species'))%>%
   left_join(fundamental_df, by = c('optima_distribution', 'simulation', 'saturation', 'species'))
 
+#Plot 1: Correlation between fundamental and realized niche --------
+realized_fundamental_p <- theta_realized_df%>%
+  mutate(simulation = as.factor(simulation))%>%
+  ggplot(aes(y = env_niche_breadth, x = sd, col = simulation,
+             group = interaction(simulation, optima_distribution, saturation)))+
+  geom_point(size = 2)+
+  scale_color_manual(values = RColorBrewer::brewer.pal(4, name = 'Set2'),
+                     name = "Simulation replicate")+
+  geom_smooth(method = 'lm', se = FALSE)+
+  facet_grid(optima_distribution~saturation)+
+  labs(x = 'Realized niche (SD)', y = "Fundamental niche")+
+  ylim(0, 0.5)+
+  theme_bw()+
+  theme(axis.title = element_text(size = 15),
+        strip.text.x = element_text(size = 12),
+        strip.text.y = element_text(size = 12))
+ggsave(file = 'niche-correlation.png')
+
+
+
+
 #Calculate correlation between theta and realized niche by optima distirbution X simulation X saturation X metric
 correlation_tibble <- theta_realized_df%>%
   group_by(optima_distribution, simulation, saturation, metric)%>%
@@ -76,13 +96,21 @@ correlation_tibble <- theta_realized_df%>%
             theta_fundamental_cor = cor(theta, env_niche_breadth, method = 'spearman'))
 
 #Exploratory analysis ------
-#I. Correlation between theta-fundamental correlation VS theta-realized
-correlation_tibble%>%
+#I. Plot 2: Correlation between theta-fundamental correlation VS theta-realized -----
+niche_theta_correlations_p <- correlation_tibble%>%
   group_by(optima_distribution, saturation, metric)%>%
   summarise(theta_real_cor_mu = mean(theta_realized_cor), theta_fund_cor_mu = mean(theta_fundamental_cor))%>%
   ggplot(aes(x = theta_real_cor_mu, y = theta_fund_cor_mu, col = optima_distribution))+
-  geom_point()+
-  facet_wrap(~saturation)
+  geom_point(size = 3, alpha = 0.8)+
+  scale_color_manual(values = RColorBrewer::brewer.pal(3, name = 'Set2'),
+                     name = 'Optima distribution')+
+  facet_wrap(~saturation)+
+  labs(x = "Theta-Realized r", y = "Theta-Fundamental r")+
+  theme_bw()+
+  theme(axis.title = element_text(size = 15),
+        strip.text.x = element_text(size = 12))
+
+ggsave(file = 'theta-niche-correlation.png', width = 8, height = 5, units = 'in')
 
 #II. PCA with metric as "species" (using just theta_realized correlation)
 library(vegan)
@@ -121,8 +149,8 @@ sample_df <- correlation_wide%>%
 
 
   
-#plot 
-sample_df%>%  
+#Plot 3: PCA of BD metrics and scenarios --------- 
+theta_pca_p <- sample_df%>%  
   ggplot(data = .)+
   geom_hline(aes(yintercept = 0),linetype = 'dashed')+
   geom_vline(aes(xintercept = 0), linetype = 'dashed')+
@@ -138,10 +166,13 @@ sample_df%>%
        y = paste0('PC2',' (', round(pca_explained[2]*100,2), '%)'))+
   ylim(-1,1) +
   theme_bw() + 
-  theme(legend.position = c(.9, .75))
+  #theme(legend.position = c(.9, .75))+
+  theme(legend.position="bottom")+
+  theme(axis.title = element_text(size = 13))
 
-
-
+quartz()
+theta_pca_p
+ggsave(file = 'theta-PCA.png')
 
 #Rank plot
 sce.rank.plot <- function(data, sce ='sc01'){
@@ -166,4 +197,56 @@ correlation_tibble%>%
   theme_bw()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust =1))
 
+#Get summary stats for each group at i)  metric and ii) across metric level
+#i) metric level
+correlation_summ <- correlation_tibble%>%
+  pivot_longer(cols = c('theta_realized_cor','theta_fundamental_cor'),
+               names_to = 'niche', values_to = 'r')%>%
+  mutate(niche = plyr::mapvalues(x = niche, from = 'theta_fundamental_cor',
+                                 to = 'Fundamental'))%>%
+  mutate(niche = plyr::mapvalues(x = niche, from = 'theta_realized_cor',
+                                 to = 'Realized'))%>%
+  group_by(optima_distribution, saturation, metric, niche)%>%
+  summarise(mean_r = mean(r), sd_r = sd(r))
+
+#ii) across metric
+scenario_summ <- correlation_tibble%>%
+  pivot_longer(cols = c('theta_realized_cor','theta_fundamental_cor'),
+               names_to = 'niche', values_to = 'r')%>%
+  mutate(niche = plyr::mapvalues(x = niche, from = 'theta_fundamental_cor',
+                                 to = 'Fundamental'))%>%
+  mutate(niche = plyr::mapvalues(x = niche, from = 'theta_realized_cor',
+                                 to = 'Realized'))%>%
+  group_by(optima_distribution, saturation, niche)%>%
+  summarise(mean_r = mean(r), sd_r = sd(r))
+
+#Plot 4: Theta (realized) performance
+performance_realized_p <- correlation_summ%>%
+  filter(niche == 'Realized')%>%
+  ggplot(aes(x = metric, y = mean_r))+
+  geom_point()+
+  geom_errorbar(aes(ymin = mean_r - sd_r, ymax = mean_r + sd_r), width = 0.3)+
+  facet_grid(optima_distribution~saturation)+
+  labs(x = 'Metric', y = 'Theta-Realized r')+
+  geom_hline(data = scenario_summ%>%filter(niche == 'Realized'),
+             aes(yintercept = mean_r), linetype = 'dashed')+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust =1))
+ggsave(plot = performance_realized_p, file = 'realized-theta-performance.png')
+
+
+#Plot 5: Theta (fundamental) performance
+performance_fun_p <- correlation_summ%>%
+  filter(niche == 'Fundamental')%>%
+  ggplot(aes(x = metric, y = mean_r))+
+  geom_point()+
+  geom_errorbar(aes(ymin = mean_r - sd_r, ymax = mean_r + sd_r), width = 0.3)+
+  facet_grid(optima_distribution~saturation)+
+  labs(x = 'Metric', y = 'Theta-Fundamental r')+
+  geom_hline(data = scenario_summ%>%filter(niche == 'Fundamental'),
+             aes(yintercept = mean_r), linetype = 'dashed')+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust =1))
+
+ggsave(plot = performance_fun_p, file = 'fundamental-theta-performance.png')
 
