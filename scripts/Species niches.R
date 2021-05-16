@@ -28,14 +28,39 @@ return(out)
 
 #NOTE: realized niches for saturated VS unsaturated are the same as it is calculated from raw community matrix data (ie. before samplingby species)
 
+#Realized niche needs to be weighted by abundance -----
 
+#Custom function to weight env by abundance to be used for group_by summaries
+weighted_realized_niche <- function(env, N, SD = TRUE, quantile_p = c(0.05, 0.95)){
+  #replicate each env by number of individuals 
+  weighted_env <- rep(env, times = N)
+  
+  if(SD == TRUE){
+    out <- weighted_env%>%
+      sd
+    
+  }
+  else{
+    quant <- weighted_env%>%
+      quantile(probs = quantile_p)
+    
+    out <- quant[2] - quant[1]
+
+  }
+
+  return(out)
+}
+
+#calcualte realized niche and join fundamental niche into same tibble
 niche_tibble <- simulation_tibble%>%
   tibble(., realized_niche = lapply(simulation_tibble$data, FUN = function(x)x%>%
            mutate(species = paste0('sp',species))%>%
            group_by(species)%>%
-           summarise(quantile_range = quantile(env, probs = 0.95) - quantile(env, probs = 0.05), sd = sd(env))),
+           summarise(quantile_range = weighted_realized_niche(env = env, N = N, SD = FALSE),
+                     sd = weighted_realized_niche(env = env, N = N, SD = TRUE))),
          fundamental_niche = lapply(simulation_tibble$data, FUN = function(x)x%>%
                                       spe_parameters))
+
 
 #Combine tibbles -----
 complete_tibble <- theta_tibble%>%
@@ -170,8 +195,8 @@ theta_pca_p <- sample_df%>%
   theme(legend.position="bottom")+
   theme(axis.title = element_text(size = 13))
 
-quartz()
-theta_pca_p
+#quartz()
+#theta_pca_p
 ggsave(file = 'theta-PCA.png')
 
 #Rank plot
@@ -232,6 +257,7 @@ performance_realized_p <- correlation_summ%>%
              aes(yintercept = mean_r), linetype = 'dashed')+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust =1))
+
 ggsave(plot = performance_realized_p, file = 'realized-theta-performance.png')
 
 
